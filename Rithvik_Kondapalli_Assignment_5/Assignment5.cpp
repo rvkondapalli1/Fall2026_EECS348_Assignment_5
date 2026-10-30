@@ -1,35 +1,43 @@
+
 /*
- * Program Name : EECS 348 Assignment 4 - Recursive Object-Oriented Sudoku Solver
+ * Program Name : EECS 348 Assignment 5 - Improved Sudoku Solver
  *
- * Description  : Solves Sudoku puzzles using recursive backtracking inside a
- *                SudokuSolver class. It finds every solution for a puzzle, and
- *                prints "No solution found" if there are none.
+ * Description  : Improves the recursive object-oriented Sudoku solver from
+ *                Assignment 4 by adding correctness, time, space, and
+ *                maintainability improvements. It uses recursive backtracking
+ *                to find every solution to a Sudoku puzzle.
  *
  * Inputs       : puzzle1.txt through puzzle5.txt in the current folder. Each file
  *                has 9 rows of 9 space-separated symbols: a digit 1-9 for a given
  *                clue, or an underscore (_) for a blank cell.
  *
- * Output       : For each file: the file name, the puzzle as read, each solution
- *                found (or "No solution found"), and the number of solutions.
+ * Output       : solution1.txt through solution5.txt. Each file contains every
+ *                solution found and the total number of solutions, or
+ *                "No solution found." if the puzzle has no solutions.
+ *                The console also prints the number of solutions for each file.
  *
  * Collaborators: None.
  *
- * Other sources: - ChatGPT (chatgpt.com): first draft. I used its class layout,
- *                  its input checking, and its solution counter.
- *                - Gemini (gemini.google.com): second draft. I used its
- *                  cell-by-cell recursion and its single-loop block check.
- *                Code marked [MIX] combines ideas from both drafts. I reviewed
- *                and tested all of it.
+ * Other sources: - ChatGPT (chatgpt.com): assisted with the original class
+ *                  layout, input checking, solution counter, and improvements.
+ *                - Gemini (gemini.google.com): assisted with the original
+ *                  cell-by-cell recursion and single-loop block checking.
+ *                - Claude (claude.ai): assisted with Assignment 5 improvements
+ *                  involving correctness, execution time, space complexity,
+ *                  and maintainability.
  *
  * Author       : Charvi Reddy Konudula
  * Creation date: October 15, 2026
+ * Revised by   : Rithvik Kondapalli
+ * Revision date: October 29, 2026
  *
  * Labels in the comments: [CHATGPT] = idea taken from ChatGPT's draft,
- * [GEMINI] = idea taken from Gemini's draft, [MIX] = combined by me from both.
+ * [GEMINI] = idea taken from Gemini's draft, [MIX] = combined ideas
+ * or modifications based on multiple sources.
  */
 
 #include <iostream>   // cout and cerr for printing
-#include <fstream>    // ifstream for reading the puzzle files
+#include <fstream>    // ifstream for reading and ofstream for writing files
 #include <string>     // string for file names and for reading symbols
 
 // Constants so the board size is written in one place instead of using 9 and 3
@@ -43,7 +51,6 @@ const int NUM_PUZZLES = 5;   // puzzle1.txt through puzzle5.txt
 class SudokuSolver {
 private:
     char board[SIZE][SIZE];      // working grid that the search fills in and erases
-    char original[SIZE][SIZE];   // copy of the puzzle as read, used for printing it
     int solutionCount;           // number of full solutions found so far
 
     // [GEMINI] Checks whether 'digit' can go at (row, col). One loop looks at
@@ -53,35 +60,62 @@ private:
     // the column cell. i / BOX and i % BOX turn i into an offset inside the
     // block, so the third check covers all 9 block cells. If the digit is
     // already in any of them, it returns false. Otherwise it returns true.
+    // Check whether a candidate conflicts with an existing value.
     bool isSafe(int row, int col, char digit) const {
         int boxTop = BOX * (row / BOX);
         int boxLeft = BOX * (col / BOX);
         for (int i = 0; i < SIZE; ++i) {
-            if (board[row][i] == digit) {
-                return false;
-            }
-            if (board[i][col] == digit) {
-                return false;
-            }
-            if (board[boxTop + i / BOX][boxLeft + i % BOX] == digit) {
-                return false;
+            if (board[row][i] == digit) return false;
+            if (board[i][col] == digit) return false;
+            if (board[boxTop + i / BOX][boxLeft + i % BOX] == digit) return false;
+        }
+        return true;
+    }
+
+    // [MIX] Goes through the original puzzle and checks that the given
+    // digits do not already break Sudoku rules. For each filled cell, it
+    // checks the rest of the row, column, and 3x3 block for duplicates.
+    // The current cell is excluded from the comparisons so that a digit
+    // does not conflict with itself. If a duplicate is found, it returns
+    // false. Otherwise it returns true.
+    // Correctness improvement: ensure given clues do not already conflict.
+    bool validInitialPuzzle() const {
+        for (int r = 0; r < SIZE; ++r) {
+            for (int c = 0; c < SIZE; ++c) {
+                if (board[r][c] == EMPTY) continue;
+                char digit = board[r][c];
+                for (int k = 0; k < SIZE; ++k) {
+                    if (k != c && board[r][k] == digit) return false;
+                    if (k != r && board[k][c] == digit) return false;
+                }
+                int boxTop = BOX * (r / BOX);
+                int boxLeft = BOX * (c / BOX);
+                for (int dr = 0; dr < BOX; ++dr) {
+                    for (int dc = 0; dc < BOX; ++dc) {
+                        int rr = boxTop + dr;
+                        int cc = boxLeft + dc;
+                        if ((rr != r || cc != c) && board[rr][cc] == digit) {
+                            return false;
+                        }
+                    }
+                }
             }
         }
         return true;
     }
 
-    // Prints a 9x9 grid, one row per line with spaces between the symbols.
-    // It takes the grid as a parameter so it can print either the working
-    // board (for solutions) or the saved original (for the puzzle as read).
-    void printBoard(const char grid[SIZE][SIZE]) const {
+    // [MIX] Prints a 9x9 grid, one row per line with spaces between the
+    // symbols. Instead of always using cout, it takes an output stream
+    // as a parameter so the same function can print to the console or
+    // write to a file. The board is not changed while printing.
+    // Maintainability improvement: this works for files or standard output.
+    void writeBoard(std::ostream& out) const {
         for (int r = 0; r < SIZE; ++r) {
             for (int c = 0; c < SIZE; ++c) {
-                std::cout << grid[r][c];
-                if (c < SIZE - 1) {
-                    std::cout << ' ';
-                }
+                out << board[r][c];
+                if (c < SIZE - 1) out << ' ';
             }
-            std::cout << '\n';
+            out << '\n';
         }
     }
 
@@ -92,10 +126,13 @@ private:
     // single index.
     //
     // Base case: when cell reaches 81, every cell is filled, so this is a
-    // complete solution. It is counted and printed, and then the function
-    // returns so the search can keep looking for other solutions.
+    // complete solution. It is counted and written to the output stream,
+    // and then the function returns so the search can keep looking for
+    // other solutions.
     //
     // If the cell already has a digit (a given clue), skip to the next cell.
+    // The while loop skips consecutive filled cells without needing a new
+    // recursive call for each one.
     //
     // Otherwise try the digits 1 to 9. For each digit that isSafe() allows,
     // place it, call search() on the next cell, and then erase it again.
@@ -103,23 +140,27 @@ private:
     // digit, and it makes sure the search finds every solution, not just
     // the first one. If no digit fits, the loop ends and the function
     // returns to the previous cell, which then tries its next digit.
-    void search(int cell) {
+    // Space improvement: pass the stream by reference instead of storing it.
+    void search(int cell, std::ostream& out) {
+        // Time improvement: skip all consecutive pre-filled cells in one call.
+        while (cell < SIZE * SIZE &&
+               board[cell / SIZE][cell % SIZE] != EMPTY) {
+            ++cell;
+        }
+
         if (cell == SIZE * SIZE) {
+            if (solutionCount > 0) out << '\n';
             ++solutionCount;
-            std::cout << "\nSolution " << solutionCount << ":\n";
-            printBoard(board);
+            writeBoard(out);
             return;
         }
+
         int row = cell / SIZE;
         int col = cell % SIZE;
-        if (board[row][col] != EMPTY) {
-            search(cell + 1);
-            return;
-        }
         for (char digit = '1'; digit <= '9'; ++digit) {
             if (isSafe(row, col, digit)) {
                 board[row][col] = digit;
-                search(cell + 1);
+                search(cell + 1, out);
                 board[row][col] = EMPTY;
             }
         }
@@ -128,74 +169,97 @@ private:
 public:
     SudokuSolver() : solutionCount(0) {}
 
-    // [CHATGPT] Reads a puzzle file into both grids. I kept ChatGPT's input
+    // [CHATGPT] Reads a puzzle file into the board. I kept ChatGPT's input
     // checking because Gemini's draft had none. It returns false with an
     // error message if the file will not open, if there are fewer than 81
     // symbols, or if a symbol is not "_" or a single digit 1-9. Each symbol
     // is read as a string token (so values like "10" are caught) and its
-    // first character is stored in board and in original.
+    // first character is stored in board.
+    //
+    // [MIX] Additional input checking rejects files containing more than
+    // 81 cells and puzzles with conflicting given clues. The puzzle is only
+    // accepted if all these checks pass.
     bool loadPuzzle(const std::string& filename) {
         std::ifstream file(filename);
         if (!file.is_open()) {
             std::cerr << "Error: cannot open " << filename << '\n';
             return false;
         }
+
         std::string token;
         for (int r = 0; r < SIZE; ++r) {
             for (int c = 0; c < SIZE; ++c) {
                 if (!(file >> token)) {
-                    std::cerr << "Error: " << filename << " has fewer than 81 cells\n";
+                    std::cerr << "Error: " << filename
+                              << " has fewer than 81 cells\n";
                     return false;
                 }
                 bool isBlank = (token == "_");
-                bool isDigit = (token.length() == 1 && token[0] >= '1' && token[0] <= '9');
+                bool isDigit = (token.length() == 1 &&
+                                token[0] >= '1' && token[0] <= '9');
                 if (!isBlank && !isDigit) {
-                    std::cerr << "Error: bad symbol '" << token << "' in " << filename << '\n';
+                    std::cerr << "Error: bad symbol '" << token
+                              << "' in " << filename << '\n';
                     return false;
                 }
                 board[r][c] = token[0];
-                original[r][c] = token[0];
             }
+        }
+        if (file >> token) {
+            std::cerr << "Error: " << filename << " has more than 81 cells\n";
+            return false;
+        }
+        if (!validInitialPuzzle()) {
+            std::cerr << "Error: conflicting clues in " << filename << '\n';
+            return false;
         }
         return true;
     }
 
-    // Prints the puzzle exactly as it was read from the file.
-    void printOriginal() const {
-        printBoard(original);
-    }
-
-    // Resets the counter and starts the search at cell 0. When the search is
-    // done, it prints the total number of solutions, or "No solution found"
-    // (the wording the assignment asks for) if the count is still 0.
-    void solve() {
-        solutionCount = 0;
-        search(0);
-        if (solutionCount == 0) {
-            std::cout << "No solution found\n";
-        } else {
-            std::cout << "\nTotal solutions found: " << solutionCount << '\n';
+    // [MIX] Opens the solution file, resets the solution counter, and
+    // starts the recursive search at cell 0. Each complete solution is
+    // written directly to the output file instead of being stored in
+    // memory. After searching, it writes the number of solutions found
+    // or "No solution found." if the count is still zero.
+    //
+    // If the output file cannot be opened, an error message is printed
+    // and -1 is returned. Otherwise the number of solutions is returned.
+    int solve(const std::string& solutionFile) {
+        std::ofstream out(solutionFile);
+        if (!out.is_open()) {
+            std::cerr << "Error: cannot write " << solutionFile << '\n';
+            return -1;
         }
+
+        solutionCount = 0;
+        search(0, out);
+        if (solutionCount == 0) {
+            out << "No solution found.\n";
+        } else {
+            out << "\nSolutions found: " << solutionCount << '\n';
+        }
+        return solutionCount;
     }
 };
 
-// main goes through the five puzzle files. For each one it builds the file
-// name, prints a header with the name, creates a new SudokuSolver, loads the
-// puzzle, and only if the load worked prints the puzzle and solves it.
-// A blank line is printed between puzzles.
+// main goes through the five puzzle files. For each one it builds the input
+// and output file names, creates a new SudokuSolver, and loads the puzzle.
+// If loading succeeds, it solves the puzzle and writes every solution to
+// the corresponding output file. The console prints the number of solutions
+// and the output file name. If a file fails to load or write, the program
+// prints an error message and continues to the next puzzle.
 int main() {
     for (int i = 1; i <= NUM_PUZZLES; ++i) {
-        std::string filename = "puzzle" + std::to_string(i) + ".txt";
-        std::cout << "========================================\n";
-        std::cout << "File: " << filename << '\n';
-        std::cout << "========================================\n";
+        std::string puzzleFile = "puzzle" + std::to_string(i) + ".txt";
+        std::string solutionFile = "solution" + std::to_string(i) + ".txt";
         SudokuSolver solver;
-        if (solver.loadPuzzle(filename)) {
-            std::cout << "\nPuzzle:\n";
-            solver.printOriginal();
-            solver.solve();
+        if (solver.loadPuzzle(puzzleFile)) {
+            int count = solver.solve(solutionFile);
+            if (count >= 0) {
+                std::cout << puzzleFile << ": " << count
+                          << " solution(s) written to " << solutionFile << '\n';
+            }
         }
-        std::cout << '\n';
     }
     return 0;
 }
